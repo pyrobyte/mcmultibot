@@ -1,0 +1,9 @@
+{
+  "name": "mcmultibot",
+  "description": "minecraft bot with minecraft-protocol to use multiple accounts",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+  	"minecraft-protocol": "0.12.1"
+  }
+}
