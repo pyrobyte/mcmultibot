@@ -22,13 +22,9 @@ etcetera:etc&c
 
 A few commands that can be used while the program is running:
 
-`exec I am a bot` make all the bots say "I am a bot"
-
-`reconnect` reconnects any disconnected bots, as they can be kicked
-
-`online` tells you how many bots are online and how many are offline
-
-`disconnect` disconnects the bots in 5-second intervals, though Ctrl+C does the job
-
-`pos 1` where 1 is the bots ID, shown on login, gives you position of the bot
+* `exec I am a bot` make all the bots say "I am a bot"
+* `reconnect` reconnects any disconnected bots, as they can be kicked
+* `online` tells you how many bots are online and how many are offline
+* `disconnect` disconnects the bots in 5-second intervals, though Ctrl+C does the job
+* `pos 1` where 1 is the bots ID, shown on login, gives you position of the bot
 
