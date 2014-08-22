@@ -28,3 +28,20 @@ A few commands that can be used while the program is running:
 * `disconnect` disconnects the bots in 5-second intervals, though Ctrl+C does the job
 * `pos 1` where 1 is the bots ID, shown on login, gives you position of the bot
 
+web view
+======
+
+The bots' locations can be seen graphed on a canvas at http://yourserverip:9999.
+
+When the digger is implemented, this will be a 3D view.
+
+installing node.js
+======
+
+As per request:
+
+1. `sudo apt-get install nodejs npm`
+
+(on debian systems)
+
+once cloned, run `npm install` in the same directory as package.json
