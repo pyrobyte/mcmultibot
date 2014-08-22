@@ -1,0 +1,38 @@
+<script src="https://cdn.socket.io/socket.io-1.0.6.js"></script>
+
+<canvas height="500" width="500" style="border: 1px solid #ccc" id="canvas">
+
+</canvas>
+
+<script>
+
+	var canvas = document.getElementById("canvas");
+	var ctx = canvas.getContext("2d");
+	var locs = {};
+ 	ctx.beginPath();
+	ctx.moveTo(250, 500);
+	ctx.lineTo(250, 0);
+	ctx.stroke();
+     
+ 	ctx.beginPath();
+	ctx.moveTo(0, 250);
+	ctx.lineTo(500, 250);
+	ctx.stroke();
+	 
+	var socket = io('http://3b3t.net:9001');
+	socket.on('position', function(data) {
+
+		if(typeof locs[data.username] != "undefined") {
+			ctx.fillStyle = "rgb(255, 255, 255)";
+			ctx.fillRect(250 + Math.floor(locs[data.username].x / 2), 250 + Math.floor(locs[data.username].z / 2), 3, 3);
+			ctx.fillStyle = "rgb(0, 0, 0)";
+
+		}
+		
+		locs[data.username] = data.pos;
+		
+		ctx.fillRect(250 + Math.floor(data.pos.x / 2), 250 + Math.floor(data.pos.z / 2), 3, 3);
+	});
+	
+
+</script>

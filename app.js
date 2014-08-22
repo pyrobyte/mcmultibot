@@ -1,7 +1,28 @@
 var mc = require('minecraft-protocol'),
 	fs = require('fs'),
-	readline = require('readline');
+	readline = require('readline'),
+	http = require('http');
+
+var io = require('socket.io')(9001);
+io.on('connection', function(socket) {
+	console.log('web viewer');
+});
+
+fs.readFile('./index.html', function (err, html) {
+    if (err) {
+        throw err; 
+    }       
+    http.createServer(function(request, response) {  
+        response.writeHeader(200, {"Content-Type": "text/html"});  
+        response.write(html);  
+        response.end();  
+    }).listen(9999);
+    
+
+});	
 	
+
+
 var accs = [];
 var clients = [];
 var host = process.argv[3];
@@ -86,7 +107,8 @@ var startClient = function(reconnect) {
 
 var connectAccount = function(username, password, id) {
 
-
+	var last = 0;
+	
 	if(typeof id == "undefined") {
 		clients.push(
 			mc.createClient({
@@ -96,6 +118,9 @@ var connectAccount = function(username, password, id) {
 				password: password,
 			})
 		);
+		
+		last = clients.length - 1;
+
 	} else {
 		clients[id] = 
 			mc.createClient({
@@ -104,10 +129,11 @@ var connectAccount = function(username, password, id) {
 				username: username,
 				password: password,
 			});
+			
+		last = id;
 	}
 
 	
-	var last = clients.length - 1;
 
 	clients[last].id = last;
 	clients[last].pwd = password;
@@ -134,9 +160,12 @@ var setupEvents = function(id) {
 		this.end('disconnect.quitting');
 		clearInterval(this.update);
 		clearInterval(this.respawn);
-		clearInterval(this.swingInterval);
-		clearInterval(this.position);
 		this.connected = false;
+		
+		setTimeout(function() {
+			console.log('Reconnecting ' + clients[id].username);
+			connectAccount(clients[id].usr, clients[id].pwd, id);
+		}, 5000);
 	}
 	
 	// Send our settings
@@ -198,65 +227,8 @@ var setupEvents = function(id) {
 	clients[id].on('position', function(packet) {
 	
 		this.pos = packet;
-		
+		io.emit('position', {pos: packet, username: this.username});
 	});
-	
-	clients[id].chat = setInterval(function() {
-	
-		//clients[id].write('chat', {message: '/kill'});
-				
-	}, 3000);
-	
-	/*
-	if(id == 1) {
-		clients[id].on('chat', function(packet) {
-			var obj = JSON.parse(packet.message);
-			var ps = obj.extra;
-			var p = "";
-			
-			for(var i = 0; i < ps.length; i++) {
-				if(ps[i].hasOwnProperty('text')) {
-					p += ps[i].text;
-				} else {
-					p += ps[i];
-				}
-			}
-			
-			var parts = p.split('> ', 2);
-			
-			console.log(parts[0]);
-			console.log(parts[1]);
-			
-			var p = parts[1];
-			if(typeof p == "undefined")
-				return;
-				
-			var bots = clients.length;
-			
-			
-			
-			var usernames = [];
-			for(var i = 0; i < clients.length; i++) {
-				usernames.push(clients[i].username);
-			}
-						
-			if(p == "> OCCUPY 2B2T <" || usernames.indexOf(parts[0].substring(1)) != -1)
-				return;
-				
-			var sent = false;
-			
-			p = p.toAustralian();
-			console.log(p.toAustralian());
-			while(!sent) {
-				var bot = parseInt(Math.round(Math.random() * bots));
-				if(clients[bot].connected) {
-					clients[bot].write('chat', {message: '/bukkit:tell ' + parts[0].substring(1) + ' ' + (p.length > 65 ? p.substring(65) : p) });
-					sent = true;
-				}
-			}
-		});
-	}
-	*/
 	
 	setTimeout(function() {
 		clients[id].respawn = setInterval(function() {
@@ -264,33 +236,28 @@ var setupEvents = function(id) {
 		}, 3000);
 	}, 1000);
 	
-}
-
-var startDigging = function(id) {
-	
-	clients[id].position = setInterval(function() {
-		clients[id].write('look', {
-			yaw: 1,
-			pitch: 90,
-			onGround: false
-		});
-	}, 350);
-	
-	clients[id].write('block_dig', {
-		status: 0,
-		x: Math.floor(clients[id].pos.x),
-		y: Math.floor(clients[id].pos.y),
-		z: Math.floor(clients[id].pos.x),
-		face: 1
+	clients[id].on('named_entity_spawn', function(packet) {
+		var username = packet.playerName;
+		
+		var containsUser = false;
+		for(var i = 0; i < clients.length; i++) {
+			if(clients[i].username == username) {
+				containsUser = true;
+				break;
+			}
+		}
+		
+		if(!containsUser) {
+			var msgs = ['No chance', 'Not even close', 'I see you', 'No way', 'Not a chance', 'Too slow', 'Nice try'];
+			var msgId = Math.round(Math.random() * (msgs.length - 1));
+			
+			this.write('chat', {message: msgs[msgId] + ', ' + username + '.'});
+			
+			setTimeout(function() {
+				clients[id].write('chat', {message: '/kill'});
+			}, 1000);
+		}
 	});
-	
-	clients[id].swingInterval = setInterval(function() {
-		clients[id].write('arm_animation', {
-			entityId: clients[id].entityId,
-			animation: 1
-		});
-	}, 350);
-
 }
 
 var rl = readline.createInterface({
@@ -300,6 +267,7 @@ var rl = readline.createInterface({
 });
 
 rl.on('line', function(text) {
+
 	if (text == 'online') {
 		var connected = 0;
 		for(var i = 0; i < clients.length; i++) {
@@ -323,7 +291,7 @@ rl.on('line', function(text) {
 						console.log('Trying to d/c ' + accs[i].username);
 						clients[i].onDisconnect();
 						discon(i + 1);
-					}, i * loginSleep);	
+					}, i * 1000);	
 				} else {
 					discon(i + 1);
 				}
@@ -338,9 +306,6 @@ rl.on('line', function(text) {
 			if(clients[i].connected)
 				clients[i].write('chat', {message: command});
 		}
-	} else if(text == 'dig ') {
-		var id = parseInt(text.substring(4));
-		startDigging(id);
 	} else if(text.indexOf('pos ') == 0) {
 		var id = parseInt(text.substring(4));
 		console.log(clients[id].pos);
@@ -350,30 +315,3 @@ rl.on('line', function(text) {
 process.on('uncaughtException', function(error) {
 	console.log('There was an error: ' + error.stack);
 });
-
-String.prototype.toAustralian = function() {
-	var words = this.split(' ');
-	
-	for(var i = 0; i < words.length; i++) {
-		words[i] = words[i].replace(/ay/g, 'ayee');
-		words[i] = words[i].replace(/a[aeiou]/g, 'or');
-		words[i] = words[i].replace(/a/g, 'aye');
-	
-		words[i] = words[i].replace(/ie/g, 'ear');
-		words[i] = words[i].replace(/i/g, 'eye');
-	
-		words[i] = words[i].replace(/oo/g, 'ew');
-		words[i] = words[i].replace(/o/g, 'aw');
-	
-		words[i] = words[i].replace(/u/g, 'uh');
-	
-		words[i] = words[i].replace(/er$/g, 'ah');
-	
-		words[i] = words[i].replace(/ing$/g, 'in');
-	}
-	
-	if(Math.random() < 0.5)
-		words.push("m8");
-		
-	return words.join(' ');
-};

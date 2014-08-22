@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-  	"minecraft-protocol": "0.12.1"
+    "minecraft-protocol": "0.12.1",
+    "socket.io": "^1.0.6"
   }
 }
