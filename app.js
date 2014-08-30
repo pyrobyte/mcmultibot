@@ -1,42 +1,12 @@
-var mc = require('minecraft-protocol'),
-	fs = require('fs'),
-	readline = require('readline'),
-	http = require('http');
-
-var io = require('socket.io')(9001);
-io.on('connection', function(socket) {
-	console.log('web viewer');
-});
-
-fs.readFile('./index.html', function (err, html) {
-    if (err) {
-        throw err; 
-    }       
-    http.createServer(function(request, response) {  
-        response.writeHeader(200, {"Content-Type": "text/html"});  
-        response.write(html);  
-        response.end();  
-    }).listen(9999);
-    
-
-});	
+var bot 		= require('./bot.js'),
+	fs 			= require('fs'),
+	readline 	= require('readline');
 	
-
-
 var accs = [];
-var clients = [];
-var host = process.argv[3];
-var port = 25565;
-var onlinePlayers = [];
-var targetBots = 0;
-var loginSleep = 5000;
-var reconnectSleep = 60000;
-
-var target = process.argv[4];
-
-fs.readFile(process.argv[2], function(error, data) {
+	
+fs.readFile('accs.txt', function(error, data) {
     var tmp = data.toString().split('\n');
-    for(var i = 0; i < tmp.length; i++) {
+    for(var i = 0; i < 10; i++) {
     
     	if(tmp[i].length < 3)
     		continue;
@@ -56,209 +26,271 @@ fs.readFile(process.argv[2], function(error, data) {
     		
     	accs.push({username: parts[0], password: parts[1]});
     }
-    targetBots = accs.length;
-    console.log('Read ' + accs.length + ' accounts from ' + process.argv[2]);
-    startClient();
+    
+    console.log('Going to try ' + accs.length + ' accs.');
+    start();
 });
-
-var startClient = function(reconnect) {
-
-	if(typeof reconnect == "undefined" || reconnect == null)
-		var reconnect = false;
 		
-	if(host.indexOf(':') != -1) {
-		var parts = host.split(':');
-		host = parts[0];
-		port = parts[1];
-	}
-
-	if(!reconnect) {
-		console.log('Connecting them to ' + host + ':' + port);	
+var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 	
-		accs.forEach(function(acc, index) {
-				console.log('Trying to connect ' + acc.username + ' using ' + acc.password);
+	console.log('Ready!');
+	var eyeHeight = 1.62;
+
+	/* Immediately reply to keep-alive requests */
+	bot.on('keep_alive', function(p) {
+		this.bot.client.write('keep_alive', p);
+	});
+	
+	bot.on(0x12, function(p) {
+		if(this.bot.visiblePlayers.hasOwnProperty(p.entityId))
+			console.log(p);
+	});
+	
+	bot.task("intel", function() {
+	
+		var bot = this;
+		bot.visiblePlayers = {};
 		
-			setTimeout(function() {
-				connectAccount(acc.username, acc.password);
-			}, index * loginSleep);
-		
+		this.client.on('named_entity_spawn', function(packet) {
+			bot.visiblePlayers[packet.entityId] = {x: packet.x / 32, y: packet.y / 32, z: packet.z / 32};
+			
 		});
-	} else {
-		console.log('Trying to reconnect the disconnected bots');
 		
-		var recon = function(i) {
-			if(i < clients.length) {
-				if(clients[i].connected == false) {
-					console.log(i);
-					setTimeout(function() {
-						console.log('Trying ' + accs[i].username);
-						connectAccount(accs[i].username, accs[i].password, i);
-						recon(i + 1);
-					}, i * loginSleep);	
-				} else {
-					recon(i + 1);
-				}
+		this.client.on('rel_entity_move', function(packet) {
+			if(bot.visiblePlayers.hasOwnProperty(packet.entityId)) {
+				bot.visiblePlayers[packet.entityId].x += packet.dX / 32;
+				bot.visiblePlayers[packet.entityId].y += packet.dY / 32;
+				bot.visiblePlayers[packet.entityId].z += packet.dZ / 32;
+				
+				console.log(bot.visiblePlayers[packet.entityId]);
 			}
+		});
+	
+		this.client.on('entity_teleport', function(packet) {
+			if(bot.visiblePlayers.hasOwnProperty(packet.entityId)) {
+				bot.visiblePlayers[packet.entityId].x = packet.x / 32;
+				bot.visiblePlayers[packet.entityId].y = packet.y / 32;
+				bot.visiblePlayers[packet.entityId].z = packet.z / 32;
+				
+				console.log(bot.visiblePlayers[packet.entityId]);
+			}
+		});
+	});
+	
+	bot.task("gaze", function() {
+	
+		var bot = this;
+
+		bot.lookAt = function(x, y, z) {
+			 var l = x - bot.pos.x;
+			 var w = z - bot.pos.z;
+			 var c = Math.sqrt( l*l + w*w )
+			 var alpha1 = -Math.asin(l/c)/Math.PI*180
+			 var alpha2 =  Math.acos(w/c)/Math.PI*180
+			 var yaw = 0;
+			 if(alpha2 > 90)
+			   yaw = 180 - alpha1
+			 else
+			   yaw = alpha1
+			   
+			var pitch = Math.atan2(y - bot.pos.y + eyeHeight, c);
+			pitch = -(pitch / Math.PI * 180);
+			
+			bot.pos.pitch = pitch;
+			bot.pos.yaw = yaw;
+			bot.lastPos.yaw = yaw;
 		};
-
-		recon(0);
-	}
-}
-
-var connectAccount = function(username, password, id) {
-
-	var last = 0;
-	
-	if(typeof id == "undefined") {
-		clients.push(
-			mc.createClient({
-				host: host,
-				port: port,
-				username: username,
-				password: password,
-			})
-		);
-		
-		last = clients.length - 1;
-
-	} else {
-		clients[id] = 
-			mc.createClient({
-				host: host,
-				port: port,
-				username: username,
-				password: password,
-			});
 			
-		last = id;
-	}
-
-	
-
-	clients[last].id = last;
-	clients[last].pwd = password;
-	clients[last].usr = username;
-	
-	clients[last].on('error', function(error) {
-		console.log(this.username + ': ' + error);
-		this.connected = false;
-	});
-	
-	clients[last].on('login', function(packet) {
-		setupEvents(this.id);
-		this.connected = true;
-		this.entityId = packet.entityId;
-	});
-
-}
-
-
-var setupEvents = function(id) {
-	console.log(clients[id].username + ' ('+ id + ') has connected to ' + host + ':' + port);
-
-	clients[id].onDisconnect = function() {
-		this.end('disconnect.quitting');
-		clearInterval(this.update);
-		clearInterval(this.respawn);
-		this.connected = false;
-		
-		setTimeout(function() {
-			console.log('Reconnecting ' + clients[id].username);
-			connectAccount(clients[id].usr, clients[id].pwd, id);
-		}, 5000);
-	}
-	
-	// Send our settings
-	clients[id].write('settings', {
-		locale: 'en_GB',
-		viewDistance: 2,
-		chatFlags: 0,
-		chatColors: true,
-		difficulty: 1,
-		showCape: true
-	});
-	
-	clients[id].update = setInterval(function() {
-		clients[id].write('flying', {onGround: true});
-	}, 1000);
-	
-	setTimeout(function() {
-		clients[id].write('chat', {message: '/kill'});
-	}, 3000);
-	
-	setTimeout(function() {
-		clients[id].write('client_command', {payload: 0});
-	}, 3000);
-
-	
-	clients[id].on('keep_alive', function(packet) {
-		this.write('keep_alive', packet);
-	});
-
-	// Update health
-	clients[id].on(0x06, function(packet) {
-		
-	});
-	
-	clients[id].on('disconnect', function(packet) {
-		console.log(this.username + ' was disconnected.');
-		this.onDisconnect();
-	});
-	
-	clients[id].on(0x40, function(packet) {
-		console.log(this.username + ' was kicked for: ' + packet.reason);
-		this.onDisconnect();
-	});
-	
-	
-	clients[id].on(0x38, function(packet) {
-		var username = packet.playerName;
-		var online = packet.online;
-		
-		if(online && onlinePlayers.indexOf(username) == -1) {
-			onlinePlayers.push(username);
 			
-		} else if(!online && onlinePlayers.indexOf(username) != -1) {
-			onlinePlayers.splice(onlinePlayers.indexOf(username), 1);
-			
-		}
-	});
-	
-	clients[id].on('position', function(packet) {
-	
-		this.pos = packet;
-		io.emit('position', {pos: packet, username: this.username});
-	});
-	
-	setTimeout(function() {
-		clients[id].respawn = setInterval(function() {
-			clients[id].write('client_command', {payload: 0});
-		}, 3000);
-	}, 1000);
-	
-	clients[id].on('named_entity_spawn', function(packet) {
-		var username = packet.playerName;
-		
-		var containsUser = false;
-		for(var i = 0; i < clients.length; i++) {
-			if(clients[i].username == username) {
-				containsUser = true;
+		/*var run = setInterval(function() {
+
+			for(var k in bot.visiblePlayers) {
+				var point = bot.visiblePlayers[k];
+				lookAt(point.x, point.y, point.z);
 				break;
 			}
-		}
+			
+		}, 50);*/
 		
-		if(!containsUser) {
-			var msgs = ['No chance', 'Not even close', 'I see you', 'No way', 'Not a chance', 'Too slow', 'Nice try'];
-			var msgId = Math.round(Math.random() * (msgs.length - 1));
-			
-			this.write('chat', {message: msgs[msgId] + ', ' + username + '.'});
-			
-			setTimeout(function() {
-				clients[id].write('chat', {message: '/kill'});
-			}, 1000);
-		}
+
 	});
-}
+	
+	bot.task("settings", function() {
+		this.client.write(0x15, {
+			locale: 'en_US',
+			viewDistance: 3,
+			colorsEnabled: true,
+			difficulty: 1,
+			showCape: true,
+			chat: 0
+		});
+	});
+	
+	
+	bot.task("respawn", function() {
+		var bot = this;
+		var run = setInterval(function() {
+			bot.client.write('client_command', {payload: 0});
+		}, 3000);
+	});
+	
+	bot.task("physics", function() {
+		
+		
+		/* Immediately send the position packet back to the server */	
+		this.client.on('position', function(p) {
+			this.write('position_look', p);
+
+			// todo don't merge
+			merge(bot.pos, p);	
+			bot.pos.stance = p.y - eyeHeight;
+		});
+		
+		this.pos = {
+			x: 0.0,
+			y: 0.0,
+			z: 0.0,
+			stance: 0.0,
+			yaw: 0.0,
+			pitch: 0.1,
+			onGround: false
+		};
+	
+		this.lastPos = {
+			x: 0.0,
+			y: 0.0,
+			z: 0.0,
+			stance: 0.0,
+			yaw: 0.0,
+			pitch: 0.1,
+			onGround: false
+		};
+		this.ticksSinceMovePacket = 0;
+		var bot = this;
+		
+		var run = setInterval(function() {
+		
+			bot.pos.onGround = true;
+			
+			var var3 = bot.pos.x - bot.lastPos.x;
+			var var5 = bot.pos.y - bot.lastPos.y;
+			var var7 = bot.pos.z - bot.lastPos.z;
+			var var9 = bot.pos.yaw - bot.lastPos.yaw;
+			var var11 = bot.pos.pitch - bot.lastPos.pitch;
+			var var13 = var3 * var3 + var5 * var5 + var7 * var7 > 0.0009 || bot.ticksSinceMovePacket >= 20;
+			var var14 = var9 != 0.0 || var11 != 0.0;
+			
+			if (var13 && var14)
+			{
+				bot.client.write('position_look', {
+					x: bot.pos.x, 
+					stance: bot.pos.stance,
+					y: bot.pos.y,
+					z: bot.pos.z,
+					yaw: bot.pos.yaw,
+					pitch: bot.pos.pitch,
+					onGround: bot.pos.onGround
+				});
+			}
+			else if (var13)
+			{
+				bot.client.write('position', {
+					x: bot.pos.x, 
+					stance: bot.pos.stance,
+					y: bot.pos.y,
+					z: bot.pos.z,
+					onGround: bot.pos.onGround
+				});
+			}
+			else if (var14)
+			{
+				bot.client.write('look', {
+					yaw: bot.pos.yaw,
+					pitch: bot.pos.pitch,
+					onGround: bot.pos.onGround
+				});	
+			}
+			else
+			{
+				bot.client.write('flying', {
+					onGround: bot.pos.onGround
+				});
+				
+			}
+
+			++bot.ticksSinceMovePacket;
+			bot.lastPos.onGround = bot.pos.onGround;
+
+			if (var13)
+			{
+				bot.lastPos.x = bot.pos.x;
+				bot.lastPos.y = bot.pos.y;
+				bot.lastPos.z = bot.pos.z;
+				bot.lastPos.stance = bot.pos.stance;
+				bot.ticksSinceMovePacket = 0;
+			}
+
+			if (var14)
+			{
+				bot.lastPos.yaw = bot.pos.yaw;
+				bot.lastPos.pitch = bot.pos.pitch;
+			}
+			
+		}, 50);
+	});
+
+	bot.task("dig", function() {
+		var bot = this;
+		
+		var dig = function() {
+			var block = {x: Math.floor(bot.pos.x), y: Math.floor(bot.pos.y - eyeHeight) - 1, z: Math.floor(bot.pos.z)};
+			console.log(block);
+			bot.lookAt(block.x, block.y - 2, block.z);
+
+			var run = setInterval(function() {
+				bot.client.write('arm_animation', {
+					entityId: bot.entityId,
+					animation: 1,
+				});
+			}, 350);
+		
+			bot.client.write('block_dig', {
+			  status: 0, // start digging
+			  x: block.x,
+			  y: block.y,
+			  z: block.z,
+			  face: 1, // hard coded to always dig from the top
+			});
+
+			setTimeout(function() {
+				bot.client.write('block_dig', {
+					status: 2, // cancel digging
+					x: block.x,
+					y: block.y,
+					z: block.z,
+					face: 1, // hard coded to always dig from the top
+				});
+
+				setTimeout(function() {
+					bot.pos.stance = block.y;
+					bot.pos.y = block.y + eyeHeight;
+					
+					dig();
+				}, 100);
+				
+			}, 7500);
+			
+			
+		};
+		
+		var run = setTimeout(function() {
+			dig();
+			console.log('Digging');
+		}, 10000);
+		
+	});
+}});
+};
 
 var rl = readline.createInterface({
     input: process.stdin,
@@ -267,51 +299,70 @@ var rl = readline.createInterface({
 });
 
 rl.on('line', function(text) {
+	bot.task('pos', function() {
+		console.log(this.pos);
+	});
+});
 
-	if (text == 'online') {
-		var connected = 0;
-		for(var i = 0; i < clients.length; i++) {
-			if(clients[i].connected)
-				connected++;
-		}
-		
-		var disconnected = clients.length - connected;
-		
-		console.log('[...] ' + connected + ' connected, ' + disconnected + ' disconnected');
-	} else if(text == 'reconnect') {
-		startClient(true);
-	} else if(text == 'disconnect') {
-		console.log('Starting disconnect...');
-		
-		var discon = function(i) {
-			if(i < clients.length) {
-				if(clients[i].connected) {
-					console.log(i);
-					setTimeout(function() {
-						console.log('Trying to d/c ' + accs[i].username);
-						clients[i].onDisconnect();
-						discon(i + 1);
-					}, i * 1000);	
-				} else {
-					discon(i + 1);
-				}
-			}
-		};
-
-		discon(0);
-		
-	} else if(text.indexOf('exec ') == 0) {
-		var command = text.substring(5);
-		for(var i = 0; i < clients.length; i++) {
-			if(clients[i].connected)
-				clients[i].write('chat', {message: command});
-		}
-	} else if(text.indexOf('pos ') == 0) {
-		var id = parseInt(text.substring(4));
-		console.log(clients[id].pos);
+var merge = function(a, b) {
+	for(var attr in b) {
+		a[attr] = b[attr];
 	}
+}
+
+process.on('SIGINT', function() {
+	console.log("\nStopping\n");
+	process.exit();
 });
 
-process.on('uncaughtException', function(error) {
-	console.log('There was an error: ' + error.stack);
+process.on('uncaughtException', function(err) {
+	console.log(err);
 });
+
+
+var euclideanMod = function(numerator, denominator) {
+  var result = numerator % denominator;
+  return result < 0 ? result + denominator : result;
+}
+  , PI = Math.PI
+  , PI_2 = Math.PI * 2
+  , TO_RAD = PI / 180
+  , TO_DEG = 1 / TO_RAD
+  , FROM_NOTCH_BYTE = 360 / 256
+  , FROM_NOTCH_VEL = 5 / 32000
+
+var toNotchianYaw = function(yaw) {
+  return toDegrees(PI - yaw);
+}
+
+var toNotchianPitch = function(pitch) {
+  return toDegrees(-pitch);
+}
+
+var fromNotchianYawByte = function(yaw) {
+  return fromNotchianYaw(yaw * FROM_NOTCH_BYTE);
+}
+
+var fromNotchianPitchByte = function(pitch) {
+  return fromNotchianPitch(pitch * FROM_NOTCH_BYTE);
+}
+
+var fromNotchVelocity = function(vel) {
+  return vel.scaled(FROM_NOTCH_VEL);
+};
+
+function toRadians(degrees) {
+  return TO_RAD * degrees;
+}
+
+function toDegrees(radians) {
+  return TO_DEG * radians;
+}
+
+function fromNotchianYaw(yaw) {
+  return euclideanMod(PI - toRadians(yaw), PI_2);
+}
+
+function fromNotchianPitch(pitch) {
+  return euclideanMod(toRadians(-pitch) + PI, PI_2) - PI;
+}
