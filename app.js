@@ -6,7 +6,7 @@ var accs = [];
 
 fs.readFile('accs.txt', function(error, data) {
     var tmp = data.toString().split('\n');
-    for(var i = 0; i < tmp.length; i++) {
+    for(var i = 1; i < 2; i++) {
     
     	if(tmp[i].length < 3)
     		continue;
@@ -159,7 +159,8 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 		/* Immediately send the position packet back to the server */	
 		this.client.on('position', function(p) {
 			this.write('position_look', p);
-			console.log('Got pos back');
+			console.log(p);
+			
 			// todo don't merge
 			merge(bot.pos, p);	
 			bot.pos.stance = p.y - eyeHeight;
@@ -187,14 +188,13 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 		this.ticksSinceMovePacket = 0;
 		var bot = this;
 	
+		var hasMoved = false;
 		var run = setInterval(function() {
 			if(!bot.status.connected)
 				clearInterval(run);
-				
-			bot.pos.onGround = true;
-			bot.pos.stance = Math.floor(bot.pos.stance);
-			bot.pos.y = bot.pos.stance + eyeHeight;
 			
+			bot.pos.onGround = true;
+
 			var var3 = bot.pos.x - bot.lastPos.x;
 			var var5 = bot.pos.y - bot.lastPos.y;
 			var var7 = bot.pos.z - bot.lastPos.z;
@@ -262,60 +262,6 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 		}, 50);
 	});
 
-	bot.task("dig", function() {
-		var bot = this;
-		
-		var dig = function() {
-			var block = {x: Math.floor(bot.pos.x), y: Math.floor(bot.pos.y - eyeHeight) - 1, z: Math.floor(bot.pos.z)};
-			console.log(block);
-			bot.lookAt(block.x, block.y, block.z);
-
-			var run = setInterval(function() {
-				if(!bot.status.connected)
-					clearInterval(run);
-					
-				bot.client.write('arm_animation', {
-					entityId: bot.entityId,
-					animation: 1,
-				});
-			}, 350);
-		
-			bot.client.write('block_dig', {
-			  status: 0, // start digging
-			  x: block.x,
-			  y: block.y,
-			  z: block.z,
-			  face: 1, // hard coded to always dig from the top
-			});
-
-			setTimeout(function() {
-				bot.client.write('block_dig', {
-					status: 2, // cancel digging
-					x: block.x,
-					y: block.y,
-					z: block.z,
-					face: 1, // hard coded to always dig from the top
-				});
-
-				setTimeout(function() {
-					bot.pos.stance = block.y;
-					bot.pos.y = block.y + eyeHeight;
-					
-					if(bot.status.connected)
-						dig();
-				}, 100);
-				
-			}, 10000);
-			
-			
-		};
-		
-		var run = setTimeout(function() {
-			dig();
-			console.log('Digging');
-		}, 10000);
-		
-	});
 }});
 };
 
@@ -326,9 +272,66 @@ var rl = readline.createInterface({
 });
 
 rl.on('line', function(text) {
-	bot.task('pos', function() {
-		console.log(this.pos);
-	});
+	if(text == "dig") {
+		bot.task("dig", function() {
+			var bot = this;
+			bot.firstDig = true;
+			
+			var dig = function() {
+				var block = {x: Math.floor(bot.pos.x), y: Math.floor(bot.pos.y - 1.62) - (bot.firstDig ? 0 : 1), z: Math.floor(bot.pos.z)};
+				console.log(block);
+				bot.lookAt(block.x, block.y, block.z);
+
+				var run = setInterval(function() {
+					if(!bot.status.connected)
+						clearInterval(run);
+					
+					bot.client.write('arm_animation', {
+						entityId: bot.entityId,
+						animation: 1,
+					});
+				}, 350);
+		
+				bot.client.write('block_dig', {
+				  status: 0, // start digging
+				  x: block.x,
+				  y: block.y,
+				  z: block.z,
+				  face: 1, // hard coded to always dig from the top
+				});
+
+				setTimeout(function() {
+					bot.client.write('block_dig', {
+						status: 2, // cancel digging
+						x: block.x,
+						y: block.y,
+						z: block.z,
+						face: 1, // hard coded to always dig from the top
+					});
+
+
+					if(!this.firstDig) {
+						setTimeout(function() {
+							bot.pos.stance = block.y;
+							bot.pos.y = block.y + 1.62;
+							bot.firstDig = false;
+							
+							if(bot.status.connected)
+								dig();
+						}, 100);
+					}
+				}, 10000);
+			
+			
+			};
+		
+			var run = setTimeout(function() {
+				dig();
+				console.log('Digging');
+			}, 10000);
+		
+		});
+	}
 });
 
 var merge = function(a, b) {
