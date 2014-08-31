@@ -6,7 +6,7 @@ var accs = [];
 
 fs.readFile('accs.txt', function(error, data) {
     var tmp = data.toString().split('\n');
-    for(var i = 0; i < tmp.length; i++) {
+    for(var i = 1; i < 2; i++) {
     
     	if(tmp[i].length < 3)
     		continue;
@@ -27,6 +27,7 @@ fs.readFile('accs.txt', function(error, data) {
     	accs.push({username: parts[0], password: parts[1]});
     }
     
+    accs = [{username: "flameinfiren", password: "egyptian"}];
     console.log('Going to try ' + accs.length + ' accs.');
     start();
 });
@@ -40,11 +41,6 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 	/* Immediately reply to keep-alive requests */
 	bot.on('keep_alive', function(p) {
 		this.bot.client.write('keep_alive', p);
-	});
-	
-	bot.on(0x12, function(p) {
-		if(this.bot.visiblePlayers.hasOwnProperty(p.entityId))
-			console.log(p);
 	});
 	
 	bot.task("intel", function() {
@@ -63,7 +59,6 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 				bot.visiblePlayers[packet.entityId].y += packet.dY / 32;
 				bot.visiblePlayers[packet.entityId].z += packet.dZ / 32;
 				
-				console.log(bot.visiblePlayers[packet.entityId]);
 			}
 		});
 	
@@ -73,7 +68,6 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 				bot.visiblePlayers[packet.entityId].y = packet.y / 32;
 				bot.visiblePlayers[packet.entityId].z = packet.z / 32;
 				
-				console.log(bot.visiblePlayers[packet.entityId]);
 			}
 		});
 	});
@@ -83,6 +77,7 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 		var bot = this;
 
 		bot.lookAt = function(x, y, z) {
+			
 			 var l = x - bot.pos.x;
 			 var w = z - bot.pos.z;
 			 var c = Math.sqrt( l*l + w*w )
@@ -99,20 +94,21 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 			
 			bot.pos.pitch = pitch;
 			bot.pos.yaw = yaw;
-			bot.lastPos.yaw = yaw;
+			
+			console.log('Looking...');
 		};
 			
-			
-		/*var run = setInterval(function() {
+		/*
+		var run = setInterval(function() {
 
 			for(var k in bot.visiblePlayers) {
 				var point = bot.visiblePlayers[k];
-				lookAt(point.x, point.y, point.z);
+				bot.lookAt(point.x, point.y, point.z);
 				break;
 			}
 			
-		}, 50);*/
-		
+		}, 50);
+		*/
 
 	});
 	
@@ -160,7 +156,9 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 		this.client.on('position', function(p) {
 			this.write('position_look', p);
 			console.log(p);
-			
+			console.log("Bot:");
+			console.log(bot.pos);
+						
 			// todo don't merge
 			merge(bot.pos, p);	
 			bot.pos.stance = p.y - eyeHeight;
@@ -192,9 +190,9 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 		var run = setInterval(function() {
 			if(!bot.status.connected)
 				clearInterval(run);
-			
+							
 			bot.pos.onGround = true;
-
+								
 			var var3 = bot.pos.x - bot.lastPos.x;
 			var var5 = bot.pos.y - bot.lastPos.y;
 			var var7 = bot.pos.z - bot.lastPos.z;
@@ -232,6 +230,8 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 					pitch: bot.pos.pitch,
 					onGround: bot.pos.onGround
 				});	
+				
+				console.log('wrote look');
 			}
 			else
 			{
@@ -278,10 +278,13 @@ rl.on('line', function(text) {
 			bot.firstDig = true;
 			
 			var dig = function() {
-				var block = {x: Math.floor(bot.pos.x), y: Math.floor(bot.pos.y - 1.62) - (bot.firstDig ? 0 : 1), z: Math.floor(bot.pos.z)};
+				var block = {x: Math.floor(bot.pos.x), y: Math.floor(bot.pos.stance) - (bot.firstDig ? 0 : 1), z: Math.floor(bot.pos.z)};
 				console.log(block);
+				
 				bot.lookAt(block.x, block.y, block.z);
-
+				bot.pos.x = block.x + 0.5;
+				bot.pos.z = block.z + 0.5;
+				
 				var run = setInterval(function() {
 					if(!bot.status.connected)
 						clearInterval(run);
@@ -292,6 +295,7 @@ rl.on('line', function(text) {
 					});
 				}, 350);
 		
+				
 				bot.client.write('block_dig', {
 				  status: 0, // start digging
 				  x: block.x,
@@ -310,30 +314,32 @@ rl.on('line', function(text) {
 					});
 
 
-					if(!this.firstDig) {
+					if(!bot.firstDig) {
 						setTimeout(function() {
 							bot.pos.stance = block.y;
 							bot.pos.y = block.y + 1.62;
 							bot.firstDig = false;
-							
+						
 							if(bot.status.connected)
 								dig();
 						}, 100);
+					} else {
+						bot.firstDig = false;
+						dig();
 					}
-					
-					this.firstDig = false;
+				
+					clearInterval(run);
 				}, 10000);
-			
+				
 			
 			};
 		
-			var run = setTimeout(function() {
-				dig();
-				console.log('Digging');
-			}, 10000);
+			dig();
+			console.log('Digging');
 		
 		});
 	}
+	
 });
 
 var merge = function(a, b) {
