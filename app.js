@@ -131,10 +131,6 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 	
 		var bot = this;
 		
-		setTimeout(function() {
-			bot.client.write('chat', {message: '/kill'});
-		}, 2000);
-		
 		var run = setInterval(function() {
 			if(!bot.status.connected) {
 				clearInterval(run);

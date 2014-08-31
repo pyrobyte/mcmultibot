@@ -75,7 +75,11 @@ var Bot = function(username, password, address, callback) {
 			this.callback.back(this);
 			delete this.callback;
 		}
-			
+
+		setTimeout(function() {
+			bot.client.write('chat', {message: '/kill'});
+		}, 2000);
+		
 		bots[this.id].status.connected = true;
 	});
 	
