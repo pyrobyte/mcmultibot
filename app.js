@@ -6,7 +6,7 @@ var accs = [];
 
 fs.readFile('accs.txt', function(error, data) {
     var tmp = data.toString().split('\n');
-    for(var i = 1; i < 2; i++) {
+    for(var i = 0; i < tmp.length; i++) {
     
     	if(tmp[i].length < 3)
     		continue;
