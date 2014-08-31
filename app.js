@@ -342,6 +342,9 @@ process.on('SIGINT', function() {
 	process.exit();
 });
 
+process.on('uncaughtException', function(e) {
+	console.log(e);
+});
 
 var euclideanMod = function(numerator, denominator) {
   var result = numerator % denominator;
