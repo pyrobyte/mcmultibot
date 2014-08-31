@@ -320,6 +320,8 @@ rl.on('line', function(text) {
 								dig();
 						}, 100);
 					}
+					
+					this.firstDig = false;
 				}, 10000);
 			
 			
