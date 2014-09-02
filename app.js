@@ -27,13 +27,12 @@ fs.readFile('accs.txt', function(error, data) {
     	accs.push({username: parts[0], password: parts[1]});
     }
     
-    accs = [{username: "flameinfiren", password: "egyptian"}];
     console.log('Going to try ' + accs.length + ' accs.');
     start();
 });
 
 
-var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
+var start = function() { bot.addBots(accs, process.argv[2], {back: function() {
 	
 	console.log('Ready!');
 	var eyeHeight = 1.62;
@@ -95,11 +94,13 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 			bot.pos.pitch = pitch;
 			bot.pos.yaw = yaw;
 			
-			console.log('Looking...');
 		};
 			
-		/*
+		
 		var run = setInterval(function() {
+
+			if(bot.digging)
+				return;
 
 			for(var k in bot.visiblePlayers) {
 				var point = bot.visiblePlayers[k];
@@ -108,7 +109,7 @@ var start = function() { bot.addBots(accs, "2b2t.org", {back: function() {
 			}
 			
 		}, 50);
-		*/
+		
 
 	});
 	
@@ -274,8 +275,10 @@ var rl = readline.createInterface({
 rl.on('line', function(text) {
 	if(text == "dig") {
 		bot.task("dig", function() {
+
 			var bot = this;
 			bot.firstDig = true;
+			bot.digging = true;
 			
 			var dig = function() {
 				var block = {x: Math.floor(bot.pos.x), y: Math.floor(bot.pos.stance) - (bot.firstDig ? 0 : 1), z: Math.floor(bot.pos.z)};
@@ -338,6 +341,8 @@ rl.on('line', function(text) {
 			console.log('Digging');
 		
 		});
+	} else {
+		bot.write('chat', {message: text});
 	}
 	
 });
